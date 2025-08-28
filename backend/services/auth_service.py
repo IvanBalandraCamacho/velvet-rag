@@ -1,4 +1,4 @@
-import jwt
+import jose import jwt
 import bcrypt
 import asyncpg
 import logging

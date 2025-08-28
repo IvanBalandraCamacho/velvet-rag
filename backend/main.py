@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     """Contexto de vida de la aplicación"""
     # Startup
     logger.info("🚀 Iniciando Velvet RAG Backend...")
+    await auth_service.initialize()
     await llm_service.initialize()
     await rag_service.initialize()
     logger.info("✅ Servicios inicializados correctamente")

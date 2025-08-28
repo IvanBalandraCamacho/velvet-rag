@@ -39,6 +39,8 @@ services:
       dockerfile: Dockerfile
     container_name: velvet-backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://velvet_user:velvet_password_secure_2024@postgres:5432/velvet_db
       REDIS_URL: redis://:redis_password_secure_2024@redis:6379/0
