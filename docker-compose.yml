@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: velvet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: velvet_db
+      POSTGRES_USER: velvet_user
+      POSTGRES_PASSWORD: velvet_password_secure_2024
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - velvet-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velvet_user -d velvet_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: velvet-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis_password_secure_2024
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - velvet-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: velvet-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://velvet_user:velvet_password_secure_2024@postgres:5432/velvet_db
+      REDIS_URL: redis://:redis_password_secure_2024@redis:6379/0
+      VLLM_BASE_URL: http://vllm-server:8000
+      JWT_SECRET_KEY: your-super-secret-jwt-key-change-this-in-production
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - velvet-network
+
+  vllm-server:
+    build:
+      context: ./vllm
+      dockerfile: Dockerfile
+    container_name: velvet-vllm
+    restart: unless-stopped
+    environment:
+      MODEL_NAME: Almawave/Velvet-14B
+      TENSOR_PARALLEL_SIZE: 1
+      MAX_MODEL_LEN: 32768
+      GPU_MEMORY_UTILIZATION: 0.9
+    volumes:
+      - model_cache:/root/.cache/huggingface
+    ports:
+      - "8001:8000"
+    networks:
+      - velvet-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 600s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: velvet-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - velvet-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_storage:
+  model_cache:
+
+networks:
+  velvet-network:
+    driver: bridge
